@@ -10,6 +10,15 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
+const (
+	MethodGet     = "GET"
+	MethodPost    = "POST"
+	MethodPut     = "PUT"
+	MethodOptions = "OPTIONS"
+	MethodDelete  = "DELETE"
+	MethodConnect = "CONNECT"
+)
+
 type Client struct {
 	Config  Config
 	Cookies map[string][]hpack.HeaderField // Used to store the data of websites cookies
@@ -25,11 +34,10 @@ type Website struct {
 }
 
 type Config struct {
-	HeaderOrder       []string
-	Headers           map[string]string
-	Protocols         []string
-	CapitalizeHeaders bool
-	Ja3               string
+	HeaderOrder, Protocols []string
+	Headers                map[string]string
+	CapitalizeHeaders      bool
+	Ja3                    string
 }
 
 type Response struct {
@@ -38,18 +46,7 @@ type Response struct {
 	Headers []hpack.HeaderField
 }
 
-const (
-	MethodGet     = "GET"
-	MethodPost    = "POST"
-	MethodPut     = "PUT"
-	MethodOptions = "OPTIONS"
-	MethodDelete  = "DELETE"
-	MethodConnect = "CONNECT"
-)
-
 type ReqConfig struct {
-	Data                     []byte
-	Cookies                  string
 	Ciphersuites             []uint16
 	Certificates             []tls.Certificate
 	CurvePreferences         []tls.CurveID
@@ -59,8 +56,7 @@ type ReqConfig struct {
 	Proxy                    *ProxyAuth
 	SaveCookies              bool
 	PreferServerCipherSuites bool
-	RootCAs                  *x509.CertPool
-	ClientCAs                *x509.CertPool
+	RootCAs, ClientCAs       *x509.CertPool
 }
 
 type ProxyAuth struct {
