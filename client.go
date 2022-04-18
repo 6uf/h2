@@ -36,6 +36,11 @@ func (Data *Client) Do(method, json string, cookies *[]string) (Config Response,
 	return Data.FindData()
 }
 
+// Changes the proxy IP. PORT etc so the next request(s) uses it.
+func (Data *Client) ChangeProxy(Proxy *ProxyAuth) {
+	Data.Client.Config.Proxy = Proxy
+}
+
 // Changes the url path, so you can send to different locations under one variable.
 func (Data *Client) ChangeURLPath(path string) {
 	Data.Client.url.Path = path
