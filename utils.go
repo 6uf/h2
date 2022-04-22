@@ -310,7 +310,7 @@ func (Data *Client) WriteSettings() {
 			ID: http2.SettingMaxHeaderListSize, Val: 262144,
 		},
 		http2.Setting{
-			ID: http2.SettingEnablePush,
+			ID: http2.SettingEnablePush, Val: 1,
 		},
 	)
 }

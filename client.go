@@ -1,5 +1,9 @@
 package h2
 
+// i suggest using webshare proxies if your using this library on a vps, since it will allow requests to go through
+// if you dont use a proxy on a vps, you wont be able to send any requests due to some bot providers detecting
+// datacenter ips.
+
 // Connects to the url you supply, and stores it inside the Client struct.
 func (Data *Client) Connect(addr string, config ReqConfig) error {
 	if err := Data.GrabUrl(addr).GenerateConn(config); err != nil {
