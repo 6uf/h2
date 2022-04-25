@@ -317,11 +317,8 @@ func (Data *Client) WriteSettings() {
 
 // Find data is called after the prior settings/window/prio frames are performed, it goes through the
 // framer and returns its data, any errors and also headers / status codes.
-func (Datas *Client) FindData() (Config Response, err error) {
-	for key, header := range Datas.Config.Headers {
-		Config.Debug.Headers = append(Config.Debug.Headers, key+":"+header)
-	}
-
+func (Datas *Client) FindData(Headers []string) (Config Response, err error) {
+	Config.Debug.Headers = Headers
 	for {
 		f, err := Datas.Client.Conn.ReadFrame()
 		if err != nil {
@@ -329,10 +326,13 @@ func (Datas *Client) FindData() (Config Response, err error) {
 		}
 		switch f := f.(type) {
 		case *http2.SettingsFrame:
-			Config.Debug.SentFrames = append(Config.Debug.SentFrames, Frames{
-				Length:   f.Length,
-				StreamID: f.StreamID,
-				Setting:  f.String(),
+			f.ForeachSetting(func(s http2.Setting) error {
+				Config.Debug.SentFrames = append(Config.Debug.SentFrames, Frames{
+					Length:   0,
+					StreamID: 0,
+					Setting:  s.String(),
+				})
+				return nil
 			})
 		case *http2.DataFrame:
 			Config.Debug.RecvFrames = append(Config.Debug.SentFrames, Frames{

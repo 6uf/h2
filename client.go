@@ -45,13 +45,14 @@ func (Data *Client) Do(method, json string, cookies *[]string) (Config Response,
 		Data.Config.Headers["cookie"] += TurnCookieHeader(*cookies)
 	}
 
-	Data.SendHeaders(Data.GetHeaders(method), method == "GET")
+	Headers := Data.GetHeaders(method)
+	Data.SendHeaders(Headers, method == "GET")
 
 	if method != "GET" {
 		Data.Client.DataSend([]byte(json))
 	}
 
-	return Data.FindData()
+	return Data.FindData(Headers)
 }
 
 // Changes the proxy IP. PORT etc so the next request(s) uses it.
