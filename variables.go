@@ -25,6 +25,19 @@ type Client struct {
 	Client  Website
 }
 
+type Debug struct {
+	Headers     []string `json:"sentheaders"`
+	HeadersRecv []string `json:"recvheaders"`
+	SentFrames  []Frames `json:"send"`
+	RecvFrames  []Frames `json:"recv"`
+}
+
+type Frames struct {
+	StreamID uint32 `json:"streamid"`
+	Setting  string `json:"name"`
+	Length   uint32 `json:"len"`
+}
+
 type Website struct {
 	url             *url.URL
 	Conn            *http2.Framer
@@ -44,6 +57,7 @@ type Response struct {
 	Data    []byte
 	Status  string
 	Headers []hpack.HeaderField
+	Debug   Debug `json:"debug"`
 }
 
 type ReqConfig struct {

@@ -318,23 +318,46 @@ func (Data *Client) WriteSettings() {
 // Find data is called after the prior settings/window/prio frames are performed, it goes through the
 // framer and returns its data, any errors and also headers / status codes.
 func (Datas *Client) FindData() (Config Response, err error) {
+	for key, header := range Datas.Config.Headers {
+		Config.Debug.Headers = append(Config.Debug.Headers, key+":"+header)
+	}
+
 	for {
 		f, err := Datas.Client.Conn.ReadFrame()
 		if err != nil {
 			return Config, err
 		}
 		switch f := f.(type) {
+		case *http2.SettingsFrame:
+			Config.Debug.SentFrames = append(Config.Debug.SentFrames, Frames{
+				Length:   f.Length,
+				StreamID: f.StreamID,
+				Setting:  f.String(),
+			})
 		case *http2.DataFrame:
+			Config.Debug.RecvFrames = append(Config.Debug.SentFrames, Frames{
+				Length:   f.Length,
+				StreamID: f.StreamID,
+				Setting:  f.String(),
+			})
+
 			Config.Data = append(Config.Data, f.Data()...)
 			if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 				return Config, nil
 			}
 		case *http2.HeadersFrame:
+			Config.Debug.RecvFrames = append(Config.Debug.SentFrames, Frames{
+				Length:   f.Length,
+				StreamID: f.StreamID,
+				Setting:  f.String(),
+			})
+
 			Config.Headers, err = hpack.NewDecoder(100000, nil).DecodeFull(f.HeaderBlockFragment())
 			if err != nil {
 				return Config, err
 			}
 			for _, Data := range Config.Headers {
+				Config.Debug.HeadersRecv = append(Config.Debug.HeadersRecv, Data.Name+":"+Data.Value)
 				if Data.Name == ":status" {
 					Config.Status = Data.Value
 				} else if Data.Name == "set-cookie" {
@@ -347,8 +370,20 @@ func (Datas *Client) FindData() (Config Response, err error) {
 				return Config, nil
 			}
 		case *http2.RSTStreamFrame:
+			Config.Debug.RecvFrames = append(Config.Debug.SentFrames, Frames{
+				Length:   f.Length,
+				StreamID: f.StreamID,
+				Setting:  f.String(),
+			})
+
 			return Config, errors.New(f.ErrCode.String())
 		case *http2.GoAwayFrame:
+			Config.Debug.RecvFrames = append(Config.Debug.SentFrames, Frames{
+				Length:   f.Length,
+				StreamID: f.StreamID,
+				Setting:  f.String(),
+			})
+
 			return Config, errors.New(f.ErrCode.String())
 		}
 	}
