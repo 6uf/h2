@@ -1,5 +1,19 @@
 package h2
 
+import (
+	"net/url"
+
+	"golang.org/x/net/http2"
+)
+
+type Conn struct {
+	url             *url.URL
+	Conn            *http2.Framer
+	MultiPlex       uint32
+	Config          ReqConfig
+	HasDoneFirstReq bool
+}
+
 // i suggest using webshare proxies if your using this library on a vps, since it will allow requests to go through
 // if you dont use a proxy on a vps, you wont be able to send any requests due to some bot providers detecting
 // datacenter ips.

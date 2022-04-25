@@ -4,7 +4,7 @@ import (
 	"crypto/x509"
 	"net/url"
 
-	tls "gitlab.com/yawning/utls.git"
+	tls "github.com/Carcraftz/utls"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"

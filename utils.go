@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	tls "gitlab.com/yawning/utls.git"
+	tls "github.com/Carcraftz/utls"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"golang.org/x/net/proxy"
