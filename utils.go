@@ -161,6 +161,7 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		Data.Client.Conn.SetReuseFrames()
 		Data.Client.Conn.AllowIllegalReads = true
 		Data.Client.Conn.AllowIllegalWrites = true
+		Data.Client.Conn.SetMaxReadFrameSize(16384)
 
 		Data.WriteSettings()
 		Data.Windows_Update()
@@ -291,7 +292,7 @@ func (Data *Client) SendHeaders(headers []string, endStream bool) {
 
 // Writes the window update frame to the http2 framer.
 func (Data *Client) Windows_Update() {
-	Data.Client.Conn.WriteWindowUpdate(0, 15663105)
+	Data.Client.Conn.WriteWindowUpdate(0, 12517377)
 }
 
 // Write settings writes the default chrome settings to the framer
@@ -311,6 +312,9 @@ func (Data *Client) WriteSettings() {
 		},
 		http2.Setting{
 			ID: http2.SettingEnablePush, Val: 1,
+		},
+		http2.Setting{
+			ID: http2.SettingInitialWindowSize, Val: 131072,
 		},
 	)
 }
