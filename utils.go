@@ -132,7 +132,7 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		}
 	}
 
-	if tlsConn := tls.UClient(conn, &tls.Config{
+	tlsConn := tls.UClient(conn, &tls.Config{
 		ServerName:               Data.Client.url.Host,
 		NextProtos:               Data.Config.Protocols,
 		InsecureSkipVerify:       config.InsecureSkipVerify,
@@ -144,29 +144,26 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		CurvePreferences:         config.CurvePreferences,
 		RootCAs:                  config.RootCAs,
 		ClientCAs:                config.ClientCAs,
-	}, tls.HelloChrome_Auto); tlsConn.ApplyPreset(Data.GenerateSpec(config)) != nil {
-		return errors.New("error while applying spec")
-	} else {
-		if config.SaveCookies {
-			if Data.Cookies == nil || len(Data.Cookies) == 0 {
-				Data.Cookies = make(map[string][]hpack.HeaderField)
-			}
+	}, tls.HelloChrome_100)
+
+	if config.SaveCookies {
+		if Data.Cookies == nil || len(Data.Cookies) == 0 {
+			Data.Cookies = make(map[string][]hpack.HeaderField)
 		}
-
-		fmt.Fprintf(tlsConn, http2.ClientPreface)
-		tlsConn.Handshake()
-		tlsConn.ApplyConfig()
-
-		Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
-		Data.Client.Conn.SetReuseFrames()
-		Data.Client.Conn.AllowIllegalReads = true
-		Data.Client.Conn.AllowIllegalWrites = true
-		Data.Client.Conn.SetMaxReadFrameSize(16384)
-
-		Data.WriteSettings()
-		Data.Windows_Update()
-		Data.Send_Prio_Frames()
 	}
+
+	fmt.Fprintf(tlsConn, http2.ClientPreface)
+	tlsConn.Handshake()
+	tlsConn.ApplyConfig()
+
+	Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
+	Data.Client.Conn.SetReuseFrames()
+	Data.Client.Conn.SetMaxReadFrameSize(16384)
+
+	Data.WriteSettings()
+	Data.Windows_Update()
+	Data.Send_Prio_Frames()
+
 	return nil
 }
 
@@ -368,11 +365,12 @@ func (Datas *Client) FindData(Headers []string) (Config Response, err error) {
 			}
 			for _, Data := range Config.Headers {
 				Config.Debug.HeadersRecv = append(Config.Debug.HeadersRecv, Data.Name+":"+Data.Value)
-				if Data.Name == ":status" {
+				switch Data.Name {
+				case ":status":
 					Config.Status = Data.Value
-				} else if Data.Name == "set-cookie" {
+				case "set-cookie":
 					if Datas.Client.Config.SaveCookies {
-						Datas.Cookies[Datas.Client.url.String()] = append(Datas.Cookies[Datas.Client.url.Host], Data)
+						Datas.Cookies[Datas.Client.url.String()] = append(Datas.Cookies[Datas.Client.url.String()], Data)
 					}
 				}
 			}
