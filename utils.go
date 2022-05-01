@@ -217,19 +217,19 @@ func (Data *Website) DataSend(body []byte) {
 // Sends priority frames, this ensures the right data is sent in the correct order.
 func (Data *Client) Send_Prio_Frames() {
 	Data.Client.Conn.WritePriority(3, http2.PriorityParam{
-		StreamDep: 201,
-		Weight:    0,
+		StreamDep: 0,
+		Weight:    200,
 		Exclusive: false,
 	})
 
 	Data.Client.Conn.WritePriority(5, http2.PriorityParam{
-		StreamDep: 101,
-		Weight:    0,
+		StreamDep: 0,
+		Weight:    100,
 		Exclusive: false,
 	})
 
 	Data.Client.Conn.WritePriority(7, http2.PriorityParam{
-		StreamDep: 1,
+		StreamDep: 0,
 		Weight:    0,
 		Exclusive: false,
 	})
@@ -241,8 +241,14 @@ func (Data *Client) Send_Prio_Frames() {
 	})
 
 	Data.Client.Conn.WritePriority(11, http2.PriorityParam{
-		StreamDep: 1,
-		Weight:    3,
+		StreamDep: 3,
+		Weight:    0,
+		Exclusive: false,
+	})
+
+	Data.Client.Conn.WritePriority(13, http2.PriorityParam{
+		StreamDep: 0,
+		Weight:    240,
 		Exclusive: false,
 	})
 }
