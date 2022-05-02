@@ -158,8 +158,6 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 
 	Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
 	Data.Client.Conn.SetReuseFrames()
-	Data.Client.Conn.SetMaxReadFrameSize(16384)
-	Data.Client.Conn.WriteSettings()
 	Data.WriteSettings()
 	Data.Windows_Update()
 	Data.Send_Prio_Frames()
@@ -314,15 +312,13 @@ func (Data *Client) WriteSettings() {
 			ID: http2.SettingMaxHeaderListSize, Val: 262144,
 		},
 		http2.Setting{
+			ID: http2.SettingMaxFrameSize, Val: 16384,
+		},
+		http2.Setting{
 			ID: http2.SettingEnablePush, Val: 1,
 		},
-		http2.Setting{
-			ID: http2.SettingInitialWindowSize, Val: 131072,
-		},
-		http2.Setting{
-			ID: http2.SettingID(0),
-		},
 	)
+	Data.Client.Conn.WriteSettingsAck()
 }
 
 // Find data is called after the prior settings/window/prio frames are performed, it goes through the
