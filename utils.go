@@ -303,19 +303,19 @@ func (Data *Client) WriteSettings() {
 			ID: http2.SettingHeaderTableSize, Val: 65536,
 		},
 		http2.Setting{
+			ID: http2.SettingEnablePush, Val: 1,
+		},
+		http2.Setting{
 			ID: http2.SettingMaxConcurrentStreams, Val: 1000,
 		},
 		http2.Setting{
 			ID: http2.SettingInitialWindowSize, Val: 6291456,
 		},
 		http2.Setting{
-			ID: http2.SettingMaxHeaderListSize, Val: 262144,
-		},
-		http2.Setting{
 			ID: http2.SettingMaxFrameSize, Val: 16384,
 		},
 		http2.Setting{
-			ID: http2.SettingEnablePush, Val: 1,
+			ID: http2.SettingMaxHeaderListSize, Val: 262144,
 		},
 	)
 	Data.Client.Conn.WriteSettingsAck()
