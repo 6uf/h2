@@ -159,7 +159,7 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 	Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
 	Data.Client.Conn.SetReuseFrames()
 	Data.Client.Conn.SetMaxReadFrameSize(16384)
-
+	Data.Client.Conn.WriteSettings()
 	Data.WriteSettings()
 	Data.Windows_Update()
 	Data.Send_Prio_Frames()
@@ -318,6 +318,9 @@ func (Data *Client) WriteSettings() {
 		},
 		http2.Setting{
 			ID: http2.SettingInitialWindowSize, Val: 131072,
+		},
+		http2.Setting{
+			ID: http2.SettingID(0),
 		},
 	)
 }
