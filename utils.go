@@ -55,45 +55,75 @@ func (Data *Client) ParseJA3String() (targetPointFormats []byte, suites []uint16
 // Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
 func (Data *Client) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 	return &tls.ClientHelloSpec{
-		CipherSuites: config.Custom.Ciphersuites,
-		TLSVersMax:   tls.VersionTLS13,
-		TLSVersMin:   tls.VersionTLS10,
+		CipherSuites:       config.Custom.Ciphersuites,
+		CompressionMethods: config.Custom.CompressionMethods,
+		TLSVersMax:         tls.VersionTLS13,
+		TLSVersMin:         tls.VersionTLS10,
 	}
 }
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
 // variable.
 func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
-	targetPointFormats, suites, targetCurves := Data.ParseJA3String()
-	spec := Data.DefaultSpec(config)
+	if config.Custom.JA3 != "" {
+		targetPointFormats, suites, targetCurves := Data.ParseJA3String()
+		spec := Data.DefaultSpec(config)
+		check := make(map[uint16]int)
+		for _, val := range suites {
+			check[val] = 1
+		}
 
-	check := make(map[uint16]int)
-	for _, val := range append(config.Custom.Ciphersuites, suites...) {
-		check[val] = 1
+		for letter := range check {
+			spec.CipherSuites = append(spec.CipherSuites, letter)
+		}
+
+		spec.Extensions = []tls.TLSExtension{
+			&tls.SNIExtension{ServerName: Data.Client.url.Host},
+			&tls.SupportedCurvesExtension{Curves: targetCurves},
+			&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
+			&tls.SessionTicketExtension{},
+			&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
+			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
+			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
+			&tls.PSKKeyExchangeModesExtension{
+				Modes: []uint8{0}}, // pskModeDHE
+			&tls.SupportedVersionsExtension{
+				Versions: []uint16{
+					tls.VersionTLS13,
+					tls.VersionTLS12,
+					tls.VersionTLS11,
+					tls.VersionTLS10}}}
+		return spec
+	} else {
+		spec := Data.DefaultSpec(config)
+
+		check := make(map[uint16]int)
+		for _, val := range config.Custom.Ciphersuites {
+			check[val] = 1
+		}
+
+		for letter := range check {
+			spec.CipherSuites = append(spec.CipherSuites, letter)
+		}
+
+		spec.Extensions = []tls.TLSExtension{
+			&tls.SNIExtension{ServerName: Data.Client.url.Host},
+			&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
+			&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
+			&tls.SessionTicketExtension{},
+			&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
+			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
+			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
+			&tls.PSKKeyExchangeModesExtension{
+				Modes: []uint8{0}}, // pskModeDHE
+			&tls.SupportedVersionsExtension{
+				Versions: []uint16{
+					tls.VersionTLS13,
+					tls.VersionTLS12,
+					tls.VersionTLS11,
+					tls.VersionTLS10}}}
+		return spec
 	}
-
-	for letter := range check {
-		spec.CipherSuites = append(spec.CipherSuites, letter)
-	}
-
-	spec.Extensions = []tls.TLSExtension{
-		&tls.SNIExtension{ServerName: Data.Client.url.Host},
-		&tls.SupportedCurvesExtension{Curves: targetCurves},
-		&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
-		&tls.SessionTicketExtension{},
-		&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
-		&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
-		&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
-		&tls.PSKKeyExchangeModesExtension{
-			Modes: []uint8{0}}, // pskModeDHE
-		&tls.SupportedVersionsExtension{
-			Versions: []uint16{
-				tls.VersionTLS13,
-				tls.VersionTLS12,
-				tls.VersionTLS11,
-				tls.VersionTLS10}}}
-
-	return spec
 }
 
 // Generate conn performs a conn to the url you supply.
@@ -101,6 +131,7 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 // TODO: Add proxy support.
 func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 	var conn net.Conn
+	var tlsConn *tls.UConn
 	if config.Proxy != nil {
 		req, err := proxy.SOCKS5("tcp", fmt.Sprintf("%v:%v", config.Proxy.IP, config.Proxy.Port), &proxy.Auth{
 			User:     config.Proxy.User,
@@ -121,15 +152,30 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		}
 	}
 
-	tlsConn := tls.UClient(conn, &tls.Config{
-		ServerName:               Data.Client.url.Host,
-		NextProtos:               Data.Config.Protocols,
-		InsecureSkipVerify:       config.InsecureSkipVerify,
-		Renegotiation:            config.Renegotiation,
-		PreferServerCipherSuites: config.PreferServerCipherSuites,
-		RootCAs:                  config.RootCAs,
-		ClientCAs:                config.ClientCAs,
-	}, config.BuildID)
+	if config.UseCustomClientHellos {
+		tlsConn = tls.UClient(conn, &tls.Config{
+			ServerName:               Data.Client.url.Host,
+			NextProtos:               Data.Config.Protocols,
+			InsecureSkipVerify:       config.InsecureSkipVerify,
+			Renegotiation:            config.Renegotiation,
+			PreferServerCipherSuites: config.PreferServerCipherSuites,
+			RootCAs:                  config.RootCAs,
+			ClientCAs:                config.ClientCAs,
+		}, tls.HelloCustom)
+		if err = tlsConn.ApplyPreset(Data.GenerateSpec(config)); err != nil {
+			return err
+		}
+	} else {
+		tlsConn = tls.UClient(conn, &tls.Config{
+			ServerName:               Data.Client.url.Host,
+			NextProtos:               Data.Config.Protocols,
+			InsecureSkipVerify:       config.InsecureSkipVerify,
+			Renegotiation:            config.Renegotiation,
+			PreferServerCipherSuites: config.PreferServerCipherSuites,
+			RootCAs:                  config.RootCAs,
+			ClientCAs:                config.ClientCAs,
+		}, config.BuildID)
+	}
 
 	if config.SaveCookies {
 		if Data.Cookies == nil || len(Data.Cookies) == 0 {
@@ -138,8 +184,10 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 	}
 
 	fmt.Fprintf(tlsConn, http2.ClientPreface)
-	tlsConn.Handshake()
-	tlsConn.ApplyConfig()
+
+	if err = tlsConn.Handshake(); err != nil {
+		return err
+	}
 
 	Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
 	Data.Client.Conn.SetReuseFrames()

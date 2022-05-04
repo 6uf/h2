@@ -77,6 +77,8 @@ type ClientHello struct {
 	Certificates       []tls.Certificate
 	CurvePreferences   []tls.CurveID
 	ClientAuth         tls.ClientAuthType
+	SupportedPoints    []uint8
+	CompressionMethods []uint8
 	TLSSignatureScheme []tls.SignatureScheme
 	//  tls.ECDSAWithP256AndSHA256,
 	//	tls.ECDSAWithP384AndSHA384,
