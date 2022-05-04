@@ -7,11 +7,10 @@ import (
 )
 
 type Conn struct {
-	url             *url.URL
-	Conn            *http2.Framer
-	MultiPlex       uint32
-	Config          ReqConfig
-	HasDoneFirstReq bool
+	Url    *url.URL
+	Conn   *http2.Framer
+	Config ReqConfig
+	Client *Client
 }
 
 // i suggest using webshare proxies if your using this library on a vps, since it will allow requests to go through
@@ -19,46 +18,48 @@ type Conn struct {
 // datacenter ips.
 
 // Connects to the url you supply, and stores it inside the Client struct.
-func (Data *Client) Connect(addr string, config ReqConfig) error {
-	if err := Data.GrabUrl(addr).GenerateConn(config); err != nil {
-		return err
+func (Data *Client) Connect(addr string, config ReqConfig) (Connection Conn, err error) {
+	Connection.Url = GrabUrl(addr)
+	if err := Connection.GenerateConn(config); err != nil {
+		return Conn{}, err
 	}
 
-	Data.Client.Config = config
+	Connection.Config = config
+	Connection.Client = Data
 
-	return nil
+	return Connection, nil
 }
 
 // Does a request, since http2 doesnt like to resent new headers. after the first request it will reconnect to the server
 // and make a new http2 framer variable to use.
-func (Data *Client) Do(method, json string, cookies *[]string) (Config Response, err error) {
+func (Data *Conn) Do(method, json string, cookies *[]string) (Config Response, err error) {
 	if cookies != nil {
-		Data.Config.Headers["cookie"] += TurnCookieHeader(*cookies)
+		Data.Client.Config.Headers["cookie"] += TurnCookieHeader(*cookies)
 	}
 
 	Headers := Data.GetHeaders(method)
 	Data.SendHeaders(Headers, method == "GET")
 
 	if method != "GET" {
-		Data.Client.DataSend([]byte(json))
+		Data.DataSend([]byte(json))
 	}
 
 	return Data.FindData(Headers)
 }
 
 // Changes the url path, so you can send to different locations under one variable.
-func (Data *Client) ChangeURLPath(path string) {
-	Data.Client.url.Path = path
+func (Data *Conn) ChangeURLPath(path string) {
+	Data.Url.Path = path
 }
 
 // adds a header to the client struct
-func (Data *Client) AddHeader(name, value string) {
-	Data.Config.Headers[name] = value
+func (Data *Conn) AddHeader(name, value string) {
+	Data.Client.Config.Headers[name] = value
 }
 
 // deletes headers from a client struct
-func (Data *Client) DeleteHeader(headernames ...string) {
+func (Data *Conn) DeleteHeader(headernames ...string) {
 	for _, val := range headernames {
-		delete(Data.Config.Headers, val)
+		delete(Data.Client.Config.Headers, val)
 	}
 }

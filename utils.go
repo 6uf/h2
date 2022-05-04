@@ -15,10 +15,14 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+type ReqConn struct {
+	Conn Website
+}
+
 // Takes a normal JA3 string and parses it into ciphersuites, tokens, curves and pointFormats
-func (Data *Client) ParseJA3String() (targetPointFormats []byte, suites []uint16, targetCurves []tls.CurveID) {
-	if Data.Client.Config.Custom.JA3 != "" {
-		tokens := strings.Split(Data.Client.Config.Custom.JA3, ",")
+func (Data *Conn) ParseJA3String() (targetPointFormats []byte, suites []uint16, targetCurves []tls.CurveID) {
+	if Data.Config.Custom.JA3 != "" {
+		tokens := strings.Split(Data.Config.Custom.JA3, ",")
 		ciphers := strings.Split(tokens[1], "-")
 		curves := strings.Split(tokens[3], "-")
 		pointFormats := strings.Split(tokens[4], "-")
@@ -53,7 +57,7 @@ func (Data *Client) ParseJA3String() (targetPointFormats []byte, suites []uint16
 }
 
 // Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
-func (Data *Client) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
+func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 	return &tls.ClientHelloSpec{
 		CipherSuites:       config.Custom.Ciphersuites,
 		CompressionMethods: config.Custom.CompressionMethods,
@@ -64,7 +68,7 @@ func (Data *Client) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
 // variable.
-func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
+func (Data *Conn) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 	if config.Custom.JA3 != "" {
 		targetPointFormats, suites, targetCurves := Data.ParseJA3String()
 		spec := Data.DefaultSpec(config)
@@ -78,11 +82,11 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 		}
 
 		spec.Extensions = []tls.TLSExtension{
-			&tls.SNIExtension{ServerName: Data.Client.url.Host},
+			&tls.SNIExtension{ServerName: Data.Url.Host},
 			&tls.SupportedCurvesExtension{Curves: targetCurves},
 			&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
 			&tls.SessionTicketExtension{},
-			&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
+			&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
 			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
 			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
 			&tls.PSKKeyExchangeModesExtension{
@@ -107,11 +111,11 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 		}
 
 		spec.Extensions = []tls.TLSExtension{
-			&tls.SNIExtension{ServerName: Data.Client.url.Host},
+			&tls.SNIExtension{ServerName: Data.Url.Host},
 			&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
 			&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
 			&tls.SessionTicketExtension{},
-			&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
+			&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
 			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
 			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
 			&tls.PSKKeyExchangeModesExtension{
@@ -129,7 +133,7 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 // Generate conn performs a conn to the url you supply.
 // Makes all the config options and sets JA3 if given a value.
 // TODO: Add proxy support.
-func (Data *Client) GenerateConn(config ReqConfig) (err error) {
+func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 	var conn net.Conn
 	var tlsConn *tls.UConn
 	if config.Proxy != nil {
@@ -141,12 +145,12 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 			return err
 		}
 
-		conn, err = req.Dial("tcp", CheckAddr(Data.Client.url))
+		conn, err = req.Dial("tcp", CheckAddr(Data.Url))
 		if err != nil {
 			return err
 		}
 	} else {
-		conn, err = net.Dial("tcp", CheckAddr(Data.Client.url))
+		conn, err = net.Dial("tcp", CheckAddr(Data.Url))
 		if err != nil {
 			return err
 		}
@@ -154,8 +158,8 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 
 	if config.UseCustomClientHellos {
 		tlsConn = tls.UClient(conn, &tls.Config{
-			ServerName:               Data.Client.url.Host,
-			NextProtos:               Data.Config.Protocols,
+			ServerName:               Data.Url.Host,
+			NextProtos:               Data.Client.Config.Protocols,
 			InsecureSkipVerify:       config.InsecureSkipVerify,
 			Renegotiation:            config.Renegotiation,
 			PreferServerCipherSuites: config.PreferServerCipherSuites,
@@ -167,8 +171,8 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		}
 	} else {
 		tlsConn = tls.UClient(conn, &tls.Config{
-			ServerName:               Data.Client.url.Host,
-			NextProtos:               Data.Config.Protocols,
+			ServerName:               Data.Url.Host,
+			NextProtos:               Data.Client.Config.Protocols,
 			InsecureSkipVerify:       config.InsecureSkipVerify,
 			Renegotiation:            config.Renegotiation,
 			PreferServerCipherSuites: config.PreferServerCipherSuites,
@@ -178,8 +182,8 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 	}
 
 	if config.SaveCookies {
-		if Data.Cookies == nil || len(Data.Cookies) == 0 {
-			Data.Cookies = make(map[string][]hpack.HeaderField)
+		if Data.Client.Cookies == nil || len(Data.Client.Cookies) == 0 {
+			Data.Client.Cookies = make(map[string][]hpack.HeaderField)
 		}
 	}
 
@@ -189,8 +193,8 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		return err
 	}
 
-	Data.Client.Conn = http2.NewFramer(tlsConn, tlsConn)
-	Data.Client.Conn.SetReuseFrames()
+	Data.Conn = http2.NewFramer(tlsConn, tlsConn)
+	Data.Conn.SetReuseFrames()
 	Data.WriteSettings()
 	Data.Windows_Update()
 	Data.Send_Prio_Frames()
@@ -200,8 +204,8 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 
 // gets a selected cookie based on the cookie_name variable
 //			e.g. "__vf_bm" > "__vf_bm=awdawd223reqfqh32rqrf32qr"
-func (Data *Client) GetCookie(cookie_name, url string) string {
-	for _, val := range Data.Cookies[url] {
+func (Data *Conn) GetCookie(cookie_name, url string) string {
+	for _, val := range Data.Client.Cookies[url] {
 		if strings.Contains(val.Value, cookie_name) {
 			Cookie := strings.Split(val.Value, "=")
 			return fmt.Sprintf("%v=%v", Cookie[0], Cookie[1])
@@ -223,9 +227,9 @@ func GetHeaderVal(name string, headers []hpack.HeaderField) hpack.HeaderField {
 
 // This is a helper function that gets all the cookies from a
 // cached url and returns them in a format that works with the cookie: header.
-func (Data *Client) TransformCookies(url string) string {
+func (Data *Conn) TransformCookies(url string) string {
 	var cookies []string
-	for _, val := range Data.Cookies[url] {
+	for _, val := range Data.Client.Cookies[url] {
 		cookie_name := strings.Split(val.Value, "=")
 		cookies = append(cookies, fmt.Sprintf("%v=%v", cookie_name[0], cookie_name[1]))
 	}
@@ -238,43 +242,43 @@ func TurnCookieHeader(Cookies []string) string {
 }
 
 // Sends data through the framer
-func (Data *Website) DataSend(body []byte) {
+func (Data *Conn) DataSend(body []byte) {
 	Data.Conn.WriteData(1, true, body)
 }
 
 // Sends priority frames, this ensures the right data is sent in the correct order.
-func (Data *Client) Send_Prio_Frames() {
-	Data.Client.Conn.WritePriority(3, http2.PriorityParam{
+func (Data *Conn) Send_Prio_Frames() {
+	Data.Conn.WritePriority(3, http2.PriorityParam{
 		StreamDep: 0,
 		Weight:    200,
 		Exclusive: false,
 	})
 
-	Data.Client.Conn.WritePriority(5, http2.PriorityParam{
+	Data.Conn.WritePriority(5, http2.PriorityParam{
 		StreamDep: 0,
 		Weight:    100,
 		Exclusive: false,
 	})
 
-	Data.Client.Conn.WritePriority(7, http2.PriorityParam{
+	Data.Conn.WritePriority(7, http2.PriorityParam{
 		StreamDep: 0,
 		Weight:    0,
 		Exclusive: false,
 	})
 
-	Data.Client.Conn.WritePriority(9, http2.PriorityParam{
+	Data.Conn.WritePriority(9, http2.PriorityParam{
 		StreamDep: 7,
 		Weight:    0,
 		Exclusive: false,
 	})
 
-	Data.Client.Conn.WritePriority(11, http2.PriorityParam{
+	Data.Conn.WritePriority(11, http2.PriorityParam{
 		StreamDep: 3,
 		Weight:    0,
 		Exclusive: false,
 	})
 
-	Data.Client.Conn.WritePriority(13, http2.PriorityParam{
+	Data.Conn.WritePriority(13, http2.PriorityParam{
 		StreamDep: 0,
 		Weight:    240,
 		Exclusive: false,
@@ -283,26 +287,26 @@ func (Data *Client) Send_Prio_Frames() {
 
 // Loops over the Config headers and applies them to the Client []string variable.
 // Method for example "GET".
-func (Data *Client) GetHeaders(method string) (headers []string) {
-	for _, name := range Data.Config.HeaderOrder {
+func (Data *Conn) GetHeaders(method string) (headers []string) {
+	for _, name := range Data.Client.Config.HeaderOrder {
 		switch name {
 		case ":authority":
-			headers = append(headers, name+": "+Data.Client.url.Host)
+			headers = append(headers, name+": "+Data.Url.Host)
 		case ":method":
 			headers = append(headers, name+": "+method)
 		case ":path":
-			headers = append(headers, name+": "+Data.CheckQuery().Client.url.Path)
+			headers = append(headers, name+": "+CheckQuery(Data.Url))
 		case ":scheme":
-			headers = append(headers, name+": "+Data.Client.url.Scheme)
+			headers = append(headers, name+": "+Data.Url.Scheme)
 		default:
-			if val, exists := Data.Config.Headers[name]; exists {
+			if val, exists := Data.Client.Config.Headers[name]; exists {
 				headers = append(headers, name+": "+val)
 			}
 		}
 	}
 
-	for name, val := range Data.Config.Headers {
-		if !strings.Contains(strings.Join(Data.Config.HeaderOrder, ","), name) {
+	for name, val := range Data.Client.Config.Headers {
+		if !strings.Contains(strings.Join(Data.Client.Config.HeaderOrder, ","), name) {
 			headers = append(headers, name+": "+val)
 		}
 	}
@@ -313,10 +317,10 @@ func (Data *Client) GetHeaders(method string) (headers []string) {
 // Writes the headers to the http2 framer.
 // this function also encodes the headers into a []byte
 // Endstream is also called in this function, only use true values when performing GET requests.
-func (Data *Client) SendHeaders(headers []string, endStream bool) {
-	Data.Client.Conn.WriteHeaders(
+func (Data *Conn) SendHeaders(headers []string, endStream bool) {
+	Data.Conn.WriteHeaders(
 		http2.HeadersFrameParam{
-			StreamID:      uint32(Data.Client.Config.ID),
+			StreamID:      uint32(Data.Config.ID),
 			BlockFragment: Data.FormHeaderBytes(headers),
 			EndHeaders:    true,
 			EndStream:     endStream,
@@ -325,13 +329,13 @@ func (Data *Client) SendHeaders(headers []string, endStream bool) {
 }
 
 // Writes the window update frame to the http2 framer.
-func (Data *Client) Windows_Update() {
-	Data.Client.Conn.WriteWindowUpdate(0, 12517377)
+func (Data *Conn) Windows_Update() {
+	Data.Conn.WriteWindowUpdate(0, 12517377)
 }
 
 // Write settings writes the default chrome settings to the framer
-func (Data *Client) WriteSettings() {
-	Data.Client.Conn.WriteSettings(
+func (Data *Conn) WriteSettings() {
+	Data.Conn.WriteSettings(
 		http2.Setting{
 			ID: http2.SettingHeaderTableSize, Val: 65536,
 		},
@@ -351,15 +355,15 @@ func (Data *Client) WriteSettings() {
 			ID: http2.SettingMaxHeaderListSize, Val: 262144,
 		},
 	)
-	Data.Client.Conn.WriteSettingsAck()
+	Data.Conn.WriteSettingsAck()
 }
 
 // Find data is called after the prior settings/window/prio frames are performed, it goes through the
 // framer and returns its data, any errors and also headers / status codes.
-func (Datas *Client) FindData(Headers []string) (Config Response, err error) {
+func (Datas *Conn) FindData(Headers []string) (Config Response, err error) {
 	Config.Debug.Headers = Headers
 	for {
-		f, err := Datas.Client.Conn.ReadFrame()
+		f, err := Datas.Conn.ReadFrame()
 		if err != nil {
 			return Config, err
 		}
@@ -401,8 +405,8 @@ func (Datas *Client) FindData(Headers []string) (Config Response, err error) {
 				case ":status":
 					Config.Status = Data.Value
 				case "set-cookie":
-					if Datas.Client.Config.SaveCookies {
-						Datas.Cookies[Datas.Client.url.String()] = append(Datas.Cookies[Datas.Client.url.String()], Data)
+					if Datas.Config.SaveCookies {
+						Datas.Client.Cookies[Datas.Url.String()] = append(Datas.Client.Cookies[Datas.Url.String()], Data)
 					}
 				}
 			}
@@ -430,30 +434,30 @@ func (Datas *Client) FindData(Headers []string) (Config Response, err error) {
 }
 
 //Turns the addr into a url.URL variable.
-func (Data *Client) GrabUrl(addr string) *Client {
-	Data.Client.url, _ = url.Parse(addr)
-	if Data.Client.url.Path == "" {
-		Data.Client.url.Path = "/"
+func GrabUrl(addr string) *url.URL {
+	URL, _ := url.Parse(addr)
+	if URL.Path == "" {
+		URL.Path = "/"
 	}
-	return Data
+	return URL
 }
 
 // Checks if there are params in your url and adds it to your path.
 //				e.g. "/api/name?code=12343&scope=1234"
-func (Data *Client) CheckQuery() *Client {
-	if Data.Client.url.Query().Encode() != "" {
-		Data.Client.url.Path += "?" + Data.Client.url.Query().Encode()
+func CheckQuery(Data *url.URL) string {
+	if Data.Query().Encode() != "" {
+		Data.Path += "?" + Data.Query().Encode()
 	}
-	return Data
+	return Data.Path
 }
 
 // Form header bytes takes the []string of headers and turns it into []byte data
 // this is so it can be compatiable for the http2 headers.
-func (Data *Client) FormHeaderBytes(headers []string) []byte {
+func (Data *Conn) FormHeaderBytes(headers []string) []byte {
 	var val []string
 	hbuf := bytes.NewBuffer([]byte{})
 	encoder := hpack.NewEncoder(hbuf)
-	if Data.Config.CapitalizeHeaders {
+	if Data.Client.Config.CapitalizeHeaders {
 		for i, header := range headers {
 			if !strings.HasPrefix(header, ":") {
 				parts := strings.Split(header, "-")

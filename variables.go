@@ -22,7 +22,6 @@ const (
 type Client struct {
 	Config  Config
 	Cookies map[string][]hpack.HeaderField // Used to store the data of websites cookies
-	Client  Website
 }
 
 type Debug struct {
