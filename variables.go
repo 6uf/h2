@@ -41,7 +41,6 @@ type Frames struct {
 type Website struct {
 	url             *url.URL
 	Conn            *http2.Framer
-	MultiPlex       uint32
 	Config          ReqConfig
 	HasDoneFirstReq bool
 }
@@ -50,7 +49,6 @@ type Config struct {
 	HeaderOrder, Protocols []string
 	Headers                map[string]string
 	CapitalizeHeaders      bool
-	Ja3                    string
 }
 
 type Response struct {
@@ -61,16 +59,36 @@ type Response struct {
 }
 
 type ReqConfig struct {
-	Ciphersuites             []uint16
-	Certificates             []tls.Certificate
-	CurvePreferences         []tls.CurveID
+	ID                       int64             // StreamID for requests (Multiplexing)
+	UseCustomClientHellos    bool              // Custom Client Hellos
+	BuildID                  tls.ClientHelloID // HelloChrome_100 etc
+	Custom                   *ClientHello      //ClientHello data
 	Renegotiation            tls.RenegotiationSupport
-	ClientAuth               tls.ClientAuthType
 	InsecureSkipVerify       bool
 	Proxy                    *ProxyAuth
 	SaveCookies              bool
 	PreferServerCipherSuites bool
 	RootCAs, ClientCAs       *x509.CertPool
+}
+
+type ClientHello struct {
+	JA3                string
+	Ciphersuites       []uint16
+	Certificates       []tls.Certificate
+	CurvePreferences   []tls.CurveID
+	ClientAuth         tls.ClientAuthType
+	TLSSignatureScheme []tls.SignatureScheme
+	//  tls.ECDSAWithP256AndSHA256,
+	//	tls.ECDSAWithP384AndSHA384,
+	//	tls.ECDSAWithP521AndSHA512,
+	//  tls.PSSWithSHA256,
+	//  tls.PSSWithSHA384,
+	//	tls.PSSWithSHA512,
+	//	tls.PKCS1WithSHA256,
+	//	tls.PKCS1WithSHA384,
+	//	tls.PKCS1WithSHA512,
+	//	tls.ECDSAWithSHA1,
+	//	tls.PKCS1WithSHA1
 }
 
 type ProxyAuth struct {

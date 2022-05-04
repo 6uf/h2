@@ -17,8 +17,8 @@ import (
 
 // Takes a normal JA3 string and parses it into ciphersuites, tokens, curves and pointFormats
 func (Data *Client) ParseJA3String() (targetPointFormats []byte, suites []uint16, targetCurves []tls.CurveID) {
-	if Data.Config.Ja3 != "" {
-		tokens := strings.Split(Data.Config.Ja3, ",")
+	if Data.Client.Config.Custom.JA3 != "" {
+		tokens := strings.Split(Data.Client.Config.Custom.JA3, ",")
 		ciphers := strings.Split(tokens[1], "-")
 		curves := strings.Split(tokens[3], "-")
 		pointFormats := strings.Split(tokens[4], "-")
@@ -55,7 +55,7 @@ func (Data *Client) ParseJA3String() (targetPointFormats []byte, suites []uint16
 // Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
 func (Data *Client) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 	return &tls.ClientHelloSpec{
-		CipherSuites: config.Ciphersuites,
+		CipherSuites: config.Custom.Ciphersuites,
 		TLSVersMax:   tls.VersionTLS13,
 		TLSVersMin:   tls.VersionTLS10,
 	}
@@ -68,7 +68,7 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 	spec := Data.DefaultSpec(config)
 
 	check := make(map[uint16]int)
-	for _, val := range append(config.Ciphersuites, suites...) {
+	for _, val := range append(config.Custom.Ciphersuites, suites...) {
 		check[val] = 1
 	}
 
@@ -82,18 +82,7 @@ func (Data *Client) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 		&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
 		&tls.SessionTicketExtension{},
 		&tls.ALPNExtension{AlpnProtocols: Data.Config.Protocols},
-		&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: []tls.SignatureScheme{
-			tls.ECDSAWithP256AndSHA256, // SignatureScheme identifies a signature algorithm supported by TLS. See RFC 8446, Section 4.2.3.
-			tls.ECDSAWithP384AndSHA384,
-			tls.ECDSAWithP521AndSHA512,
-			tls.PSSWithSHA256,
-			tls.PSSWithSHA384,
-			tls.PSSWithSHA512,
-			tls.PKCS1WithSHA256,
-			tls.PKCS1WithSHA384,
-			tls.PKCS1WithSHA512,
-			tls.ECDSAWithSHA1,
-			tls.PKCS1WithSHA1}},
+		&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
 		&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
 		&tls.PSKKeyExchangeModesExtension{
 			Modes: []uint8{0}}, // pskModeDHE
@@ -137,14 +126,10 @@ func (Data *Client) GenerateConn(config ReqConfig) (err error) {
 		NextProtos:               Data.Config.Protocols,
 		InsecureSkipVerify:       config.InsecureSkipVerify,
 		Renegotiation:            config.Renegotiation,
-		CipherSuites:             config.Ciphersuites,
-		Certificates:             config.Certificates,
-		ClientAuth:               config.ClientAuth,
 		PreferServerCipherSuites: config.PreferServerCipherSuites,
-		CurvePreferences:         config.CurvePreferences,
 		RootCAs:                  config.RootCAs,
 		ClientCAs:                config.ClientCAs,
-	}, tls.HelloChrome_100)
+	}, config.BuildID)
 
 	if config.SaveCookies {
 		if Data.Cookies == nil || len(Data.Cookies) == 0 {
@@ -283,7 +268,7 @@ func (Data *Client) GetHeaders(method string) (headers []string) {
 func (Data *Client) SendHeaders(headers []string, endStream bool) {
 	Data.Client.Conn.WriteHeaders(
 		http2.HeadersFrameParam{
-			StreamID:      Data.Client.MultiPlex,
+			StreamID:      uint32(Data.Client.Config.ID),
 			BlockFragment: Data.FormHeaderBytes(headers),
 			EndHeaders:    true,
 			EndStream:     endStream,
@@ -498,6 +483,5 @@ func GetDefaultConfig() Config {
 			"accept-language":           "en-US,en;q=0.9",
 		},
 		Protocols: []string{"h2", "h1", "http/1.1"},
-		Ja3:       `771,5-4-2-8-20-3-1-21-6-22-23-51-57-25-58-26-24-53-9-10-27-47-52-49168-49158-49173-49163-49153-59-49200-49196-49192-49188-49172-49162-163-159-107-106-56-136-135-49177-167-109-137-49202-49198-49194-49190-49167-49157-157-61-132-49170-49160-19-49175-49165-49155-49199-49195-49191-49187-49171-49161-162-158-103-64-50-154-153-69-68-49176-166-108-155-70-49201-49197-49193-49189-49166-49156-156-60-150-65-49169-49159-49174-49164-49154-18-17-255,11-10-35-13-15,14-13-25-11-12-24-9-10-22-23-8-6-7-20-21-4-5-18-19-1-2-3-15-16-17,0-1-2`,
 	}
 }

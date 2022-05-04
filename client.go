@@ -24,7 +24,6 @@ func (Data *Client) Connect(addr string, config ReqConfig) error {
 		return err
 	}
 
-	Data.Client.MultiPlex = 1
 	Data.Client.Config = config
 
 	return nil
