@@ -32,14 +32,6 @@ func (Data *Client) Connect(addr string, config ReqConfig) error {
 // Does a request, since http2 doesnt like to resent new headers. after the first request it will reconnect to the server
 // and make a new http2 framer variable to use.
 func (Data *Client) Do(method, json string, cookies *[]string) (Config Response, err error) {
-	if !Data.Client.HasDoneFirstReq {
-		Data.Client.HasDoneFirstReq = true
-	} else {
-		if err = Data.GenerateConn(Data.Client.Config); err != nil {
-			return
-		}
-	}
-
 	if cookies != nil {
 		Data.Config.Headers["cookie"] += TurnCookieHeader(*cookies)
 	}
@@ -52,11 +44,6 @@ func (Data *Client) Do(method, json string, cookies *[]string) (Config Response,
 	}
 
 	return Data.FindData(Headers)
-}
-
-// Changes the proxy IP. PORT etc so the next request(s) uses it.
-func (Data *Client) ChangeProxy(Proxy *ProxyAuth) {
-	Data.Client.Config.Proxy = Proxy
 }
 
 // Changes the url path, so you can send to different locations under one variable.
