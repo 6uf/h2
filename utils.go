@@ -314,7 +314,7 @@ func GrabUrl(addr string) *url.URL {
 //				e.g. "/api/name?code=12343&scope=1234"
 func CheckQuery(Data *url.URL) string {
 	if Data.Query().Encode() != "" {
-		Data.Path += "?" + Data.Query().Encode()
+		Data.Path = Data.Path + "?" + Data.Query().Encode()
 	}
 	return Data.Path
 }
