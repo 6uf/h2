@@ -66,6 +66,22 @@ func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 	}
 }
 
+func DefaultTLSSignatureScheme() []tls.SignatureScheme {
+	return []tls.SignatureScheme{
+		tls.ECDSAWithP256AndSHA256,
+		tls.ECDSAWithP384AndSHA384,
+		tls.ECDSAWithP521AndSHA512,
+		tls.PSSWithSHA256,
+		tls.PSSWithSHA384,
+		tls.PSSWithSHA512,
+		tls.PKCS1WithSHA256,
+		tls.PKCS1WithSHA384,
+		tls.PKCS1WithSHA512,
+		tls.ECDSAWithSHA1,
+		tls.PKCS1WithSHA1,
+	}
+}
+
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
 // variable.
 func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
