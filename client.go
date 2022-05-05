@@ -20,12 +20,12 @@ type Conn struct {
 // Connects to the url you supply, and stores it inside the Client struct.
 func (Data *Client) Connect(addr string, config ReqConfig) (Connection Conn, err error) {
 	Connection.Url = GrabUrl(addr)
+	Connection.Client = Data
+	Connection.Config = config
+
 	if err := Connection.GenerateConn(config); err != nil {
 		return Conn{}, err
 	}
-
-	Connection.Config = config
-	Connection.Client = Data
 
 	return Connection, nil
 }
