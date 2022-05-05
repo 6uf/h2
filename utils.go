@@ -2,12 +2,10 @@ package h2
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
-	"strconv"
 	"strings"
 
 	tls "github.com/Carcraftz/utls"
@@ -15,145 +13,6 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"golang.org/x/net/proxy"
 )
-
-type ReqConn struct {
-	Conn Website
-}
-
-func DefaultTLSSignatureScheme() []tls.SignatureScheme {
-	return []tls.SignatureScheme{
-		1027,
-		2052,
-		1025,
-		1283,
-		2053,
-		1281,
-		2054,
-		1537,
-	}
-}
-
-func (Data *Conn) ParseJA3String(ja3 string) *tls.ClientHelloSpec {
-	tokens := strings.Split(ja3, ",")
-
-	version := tokens[0]
-	ciphers := strings.Split(tokens[1], "-")
-	extensions := strings.Split(tokens[2], "-")
-	curves := strings.Split(tokens[3], "-")
-	if len(curves) == 1 && curves[0] == "" {
-		curves = []string{}
-	}
-	pointFormats := strings.Split(tokens[4], "-")
-	if len(pointFormats) == 1 && pointFormats[0] == "" {
-		pointFormats = []string{}
-	}
-
-	// parse curves
-	var targetCurves []tls.CurveID
-	for _, c := range curves {
-		cid, err := strconv.ParseUint(c, 10, 16)
-		if err != nil {
-			return nil
-		}
-		targetCurves = append(targetCurves, tls.CurveID(cid))
-	}
-	extMap["10"] = &tls.SupportedCurvesExtension{Curves: targetCurves}
-
-	// parse point formats
-	var targetPointFormats []byte
-	for _, p := range pointFormats {
-		pid, err := strconv.ParseUint(p, 10, 8)
-		if err != nil {
-			return nil
-		}
-		targetPointFormats = append(targetPointFormats, byte(pid))
-	}
-	extMap["11"] = &tls.SupportedPointsExtension{SupportedPoints: targetPointFormats}
-
-	// build extenions list
-	var exts []tls.TLSExtension
-	for _, e := range extensions {
-		te, ok := extMap[e]
-		if !ok {
-			return nil
-		}
-		exts = append(exts, te)
-	}
-	// build SSLVersion
-	vid64, err := strconv.ParseUint(version, 10, 16)
-	if err != nil {
-		return nil
-	}
-	vid := uint16(vid64)
-
-	// build CipherSuites
-	var suites []uint16
-	for _, c := range ciphers {
-		cid, err := strconv.ParseUint(c, 10, 16)
-		if err != nil {
-			return nil
-		}
-		suites = append(suites, uint16(cid))
-	}
-
-	return &tls.ClientHelloSpec{
-		TLSVersMin:         vid,
-		TLSVersMax:         vid,
-		CipherSuites:       suites,
-		CompressionMethods: []byte{0},
-		Extensions:         exts,
-		GetSessionID:       sha256.Sum256,
-	}
-}
-
-// This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
-// variable.
-func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
-	if config.Custom.JA3 != "" {
-		return Data.ParseJA3String(config.Custom.JA3)
-	} else {
-		return &tls.ClientHelloSpec{
-			CipherSuites: config.Custom.Ciphersuites,
-			TLSVersMin:   tls.VersionTLS13,
-			TLSVersMax:   tls.VersionTLS13,
-			GetSessionID: sha256.Sum256,
-			Extensions: []tls.TLSExtension{
-				&tls.CompressCertificateExtension{
-					Algorithms: []tls.CertCompressionAlgo{
-						tls.CertCompressionBrotli,
-						tls.CertCompressionZlib,
-					},
-				},
-				&tls.StatusRequestExtension{},
-				&tls.SNIExtension{ServerName: Data.Url.Host},
-				&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
-				&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
-				&tls.SCTExtension{},
-				&tls.UtlsPaddingExtension{GetPaddingLen: tls.BoringPaddingStyle},
-				&tls.UtlsExtendedMasterSecretExtension{},
-				&tls.FakeRecordSizeLimitExtension{},
-				&tls.SessionTicketExtension{},
-				&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
-				&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
-				&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
-				&tls.PSKKeyExchangeModesExtension{
-					Modes: []uint8{
-						tls.PskModeDHE,
-					}},
-				&tls.RenegotiationInfoExtension{
-					Renegotiation: tls.RenegotiateFreelyAsClient,
-				},
-				&tls.NPNExtension{},
-				&tls.SupportedVersionsExtension{
-					Versions: []uint16{
-						tls.GREASE_PLACEHOLDER,
-						tls.VersionTLS13,
-						tls.VersionTLS12,
-						tls.VersionTLS11,
-						tls.VersionTLS10}}},
-		}
-	}
-}
 
 // Generate conn performs a conn to the url you supply.
 // Makes all the config options and sets JA3 if given a value.
@@ -181,30 +40,15 @@ func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 		}
 	}
 
-	if config.UseCustomClientHellos {
-		tlsConn = tls.UClient(conn, &tls.Config{
-			ServerName:               Data.Url.Host,
-			NextProtos:               Data.Client.Config.Protocols,
-			InsecureSkipVerify:       config.InsecureSkipVerify,
-			Renegotiation:            config.Renegotiation,
-			PreferServerCipherSuites: config.PreferServerCipherSuites,
-			RootCAs:                  config.RootCAs,
-			ClientCAs:                config.ClientCAs,
-		}, tls.HelloCustom)
-		if err := tlsConn.ApplyPreset(Data.DefaultSpec(config)); err != nil {
-			return err
-		}
-	} else {
-		tlsConn = tls.UClient(conn, &tls.Config{
-			ServerName:               Data.Url.Host,
-			NextProtos:               Data.Client.Config.Protocols,
-			InsecureSkipVerify:       config.InsecureSkipVerify,
-			Renegotiation:            config.Renegotiation,
-			PreferServerCipherSuites: config.PreferServerCipherSuites,
-			RootCAs:                  config.RootCAs,
-			ClientCAs:                config.ClientCAs,
-		}, config.BuildID)
-	}
+	tlsConn = tls.UClient(conn, &tls.Config{
+		ServerName:               Data.Url.Host,
+		NextProtos:               Data.Client.Config.Protocols,
+		InsecureSkipVerify:       config.InsecureSkipVerify,
+		Renegotiation:            config.Renegotiation,
+		PreferServerCipherSuites: config.PreferServerCipherSuites,
+		RootCAs:                  config.RootCAs,
+		ClientCAs:                config.ClientCAs,
+	}, config.BuildID)
 
 	if config.SaveCookies {
 		if Data.Client.Cookies == nil || len(Data.Client.Cookies) == 0 {
