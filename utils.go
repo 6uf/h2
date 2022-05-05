@@ -63,20 +63,17 @@ func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
 // variable.
-func (Data *Conn) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
+func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
 	if config.Custom.JA3 != "" {
-		targetPointFormats, suites, targetCurves := Data.ParseJA3String()
-		spec := Data.DefaultSpec(config)
-		check := make(map[uint16]int)
-		for _, val := range suites {
-			check[val] = 1
-		}
+		targetPointFormats, _, targetCurves := Data.ParseJA3String()
 
-		for letter := range check {
-			spec.CipherSuites = append(spec.CipherSuites, letter)
-		}
-
-		spec.Extensions = []tls.TLSExtension{
+		return []tls.TLSExtension{
+			&tls.CompressCertificateExtension{
+				Algorithms: []tls.CertCompressionAlgo{
+					tls.CertCompressionBrotli,
+					tls.CertCompressionZlib,
+				},
+			},
 			&tls.SNIExtension{ServerName: Data.Url.Host},
 			&tls.SupportedCurvesExtension{Curves: targetCurves},
 			&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
@@ -92,20 +89,14 @@ func (Data *Conn) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 					tls.VersionTLS12,
 					tls.VersionTLS11,
 					tls.VersionTLS10}}}
-		return spec
 	} else {
-		spec := Data.DefaultSpec(config)
-
-		check := make(map[uint16]int)
-		for _, val := range config.Custom.Ciphersuites {
-			check[val] = 1
-		}
-
-		for letter := range check {
-			spec.CipherSuites = append(spec.CipherSuites, letter)
-		}
-
-		spec.Extensions = []tls.TLSExtension{
+		return []tls.TLSExtension{
+			&tls.CompressCertificateExtension{
+				Algorithms: []tls.CertCompressionAlgo{
+					tls.CertCompressionBrotli,
+					tls.CertCompressionZlib,
+				},
+			},
 			&tls.SNIExtension{ServerName: Data.Url.Host},
 			&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
 			&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
@@ -121,7 +112,6 @@ func (Data *Conn) GenerateSpec(config ReqConfig) *tls.ClientHelloSpec {
 					tls.VersionTLS12,
 					tls.VersionTLS11,
 					tls.VersionTLS10}}}
-		return spec
 	}
 }
 
@@ -161,9 +151,8 @@ func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 			RootCAs:                  config.RootCAs,
 			ClientCAs:                config.ClientCAs,
 		}, tls.HelloCustom)
-		if err = tlsConn.ApplyPreset(Data.GenerateSpec(config)); err != nil {
-			return err
-		}
+
+		tlsConn.Extensions = append(tlsConn.Extensions, Data.GenerateSpec(config)...)
 	} else {
 		tlsConn = tls.UClient(conn, &tls.Config{
 			ServerName:               Data.Url.Host,
