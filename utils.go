@@ -58,12 +58,7 @@ func (Data *Conn) ParseJA3String() (targetPointFormats []byte, suites []uint16, 
 
 // Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
 func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
-	return &tls.ClientHelloSpec{
-		CipherSuites:       config.Custom.Ciphersuites,
-		CompressionMethods: config.Custom.CompressionMethods,
-		TLSVersMax:         tls.VersionTLS13,
-		TLSVersMin:         tls.VersionTLS10,
-	}
+	return &tls.ClientHelloSpec{}
 }
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
@@ -243,7 +238,7 @@ func TurnCookieHeader(Cookies []string) string {
 
 // Sends data through the framer
 func (Data *Conn) DataSend(body []byte) {
-	Data.Conn.WriteData(1, true, body)
+	Data.Conn.WriteData(uint32(Data.Config.ID), true, body)
 }
 
 // Sends priority frames, this ensures the right data is sent in the correct order.
@@ -330,7 +325,7 @@ func (Data *Conn) SendHeaders(headers []string, endStream bool) {
 
 // Writes the window update frame to the http2 framer.
 func (Data *Conn) Windows_Update() {
-	Data.Conn.WriteWindowUpdate(0, 12517377)
+	Data.Conn.WriteWindowUpdate(0, 15663105)
 }
 
 // Write settings writes the default chrome settings to the framer
@@ -355,7 +350,6 @@ func (Data *Conn) WriteSettings() {
 			ID: http2.SettingMaxHeaderListSize, Val: 262144,
 		},
 	)
-	Data.Conn.WriteSettingsAck()
 }
 
 // Find data is called after the prior settings/window/prio frames are performed, it goes through the
