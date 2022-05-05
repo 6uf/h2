@@ -152,7 +152,7 @@ func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 			RootCAs:                  config.RootCAs,
 			ClientCAs:                config.ClientCAs,
 		}, tls.HelloCustom)
-		tlsConn.Extensions = append(tlsConn.Extensions, Data.GenerateSpec(config)...)
+		tlsConn.Extensions = Data.GenerateSpec(config)
 	} else {
 		tlsConn = tls.UClient(conn, &tls.Config{
 			ServerName:               Data.Url.Host,
@@ -314,7 +314,7 @@ func (Data *Conn) SendHeaders(headers []string, endStream bool) {
 
 // Writes the window update frame to the http2 framer.
 func (Data *Conn) Windows_Update() {
-	Data.Conn.WriteWindowUpdate(0, 15663105)
+	Data.Conn.WriteWindowUpdate(0, 12517377)
 }
 
 // Write settings writes the default chrome settings to the framer
@@ -330,7 +330,7 @@ func (Data *Conn) WriteSettings() {
 			ID: http2.SettingMaxConcurrentStreams, Val: 1000,
 		},
 		http2.Setting{
-			ID: http2.SettingInitialWindowSize, Val: 6291456,
+			ID: http2.SettingInitialWindowSize, Val: 131072,
 		},
 		http2.Setting{
 			ID: http2.SettingMaxFrameSize, Val: 16384,
@@ -496,6 +496,7 @@ func GetDefaultConfig() Config {
 			"sec-ch-ua",
 			"sec-ch-ua-mobile",
 			"sec-ch-ua-platform",
+			"sec-ch-ua-platform-version",
 			"upgrade-insecure-requests",
 			"user-agent",
 			"sec-fetch-site",
