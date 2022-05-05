@@ -145,13 +145,13 @@ func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 		tlsConn = tls.UClient(conn, &tls.Config{
 			ServerName:               Data.Url.Host,
 			NextProtos:               Data.Client.Config.Protocols,
+			CipherSuites:             Data.Config.Custom.Ciphersuites,
 			InsecureSkipVerify:       config.InsecureSkipVerify,
 			Renegotiation:            config.Renegotiation,
 			PreferServerCipherSuites: config.PreferServerCipherSuites,
 			RootCAs:                  config.RootCAs,
 			ClientCAs:                config.ClientCAs,
 		}, tls.HelloCustom)
-
 		tlsConn.Extensions = append(tlsConn.Extensions, Data.GenerateSpec(config)...)
 	} else {
 		tlsConn = tls.UClient(conn, &tls.Config{
