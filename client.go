@@ -34,6 +34,14 @@ func (Data *Client) Connect(addr string, config ReqConfig) (Connection Conn, err
 // Does a request, since http2 doesnt like to resent new headers. after the first request it will reconnect to the server
 // and make a new http2 framer variable to use.
 func (Data *Conn) Do(method, json string, cookies *[]string) (Config Response, err error) {
+	if !Data.FirstUse {
+		Data.FirstUse = true
+	} else {
+		if err = Data.GenerateConn(Data.Config); err != nil {
+			return
+		}
+	}
+
 	if cookies != nil {
 		Data.Client.Config.Headers["cookie"] += TurnCookieHeader(*cookies)
 	}
