@@ -2,6 +2,7 @@ package h2
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net"
@@ -19,125 +20,138 @@ type ReqConn struct {
 	Conn Website
 }
 
-// Takes a normal JA3 string and parses it into ciphersuites, tokens, curves and pointFormats
-func (Data *Conn) ParseJA3String() (targetPointFormats []byte, suites []uint16, targetCurves []tls.CurveID) {
-	if Data.Config.Custom.JA3 != "" {
-		tokens := strings.Split(Data.Config.Custom.JA3, ",")
-		ciphers := strings.Split(tokens[1], "-")
-		curves := strings.Split(tokens[3], "-")
-		pointFormats := strings.Split(tokens[4], "-")
-
-		if len(curves) == 1 && curves[0] == "" {
-			curves = []string{}
-		}
-
-		if len(pointFormats) == 1 && pointFormats[0] == "" {
-			pointFormats = []string{}
-		}
-
-		// parse curves
-		targetCurves = append(targetCurves, tls.CurveID(tls.GREASE_PLACEHOLDER)) //append grease for Chrome browsers
-		for _, c := range curves {
-			cid, _ := strconv.ParseUint(c, 10, 16)
-			targetCurves = append(targetCurves, tls.CurveID(cid))
-		}
-
-		for _, p := range pointFormats {
-			pid, _ := strconv.ParseUint(p, 10, 8)
-			targetPointFormats = append(targetPointFormats, byte(pid))
-		}
-
-		for _, c := range ciphers {
-			cid, _ := strconv.ParseUint(c, 10, 16)
-			suites = append(suites, uint16(cid))
-		}
-	}
-
-	return
-}
-
-// Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
-func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
-	return &tls.ClientHelloSpec{
-		CipherSuites: config.Custom.Ciphersuites,
-		Extensions:   Data.GenerateSpec(config),
-		TLSVersMin:   tls.VersionTLS10,
-		TLSVersMax:   tls.VersionTLS13,
-	}
-}
-
 func DefaultTLSSignatureScheme() []tls.SignatureScheme {
 	return []tls.SignatureScheme{
-		tls.ECDSAWithP256AndSHA256,
-		tls.ECDSAWithP384AndSHA384,
-		tls.ECDSAWithP521AndSHA512,
-		tls.PSSWithSHA256,
-		tls.PSSWithSHA384,
-		tls.PSSWithSHA512,
-		tls.PKCS1WithSHA256,
-		tls.PKCS1WithSHA384,
-		tls.PKCS1WithSHA512,
-		tls.ECDSAWithSHA1,
-		tls.PKCS1WithSHA1,
+		1027,
+		2052,
+		1025,
+		1283,
+		2053,
+		1281,
+		2054,
+		1537,
+	}
+}
+
+func (Data *Conn) ParseJA3String(ja3 string) *tls.ClientHelloSpec {
+	tokens := strings.Split(ja3, ",")
+
+	version := tokens[0]
+	ciphers := strings.Split(tokens[1], "-")
+	extensions := strings.Split(tokens[2], "-")
+	curves := strings.Split(tokens[3], "-")
+	if len(curves) == 1 && curves[0] == "" {
+		curves = []string{}
+	}
+	pointFormats := strings.Split(tokens[4], "-")
+	if len(pointFormats) == 1 && pointFormats[0] == "" {
+		pointFormats = []string{}
+	}
+
+	// parse curves
+	var targetCurves []tls.CurveID
+	for _, c := range curves {
+		cid, err := strconv.ParseUint(c, 10, 16)
+		if err != nil {
+			return nil
+		}
+		targetCurves = append(targetCurves, tls.CurveID(cid))
+	}
+	extMap["10"] = &tls.SupportedCurvesExtension{Curves: targetCurves}
+
+	// parse point formats
+	var targetPointFormats []byte
+	for _, p := range pointFormats {
+		pid, err := strconv.ParseUint(p, 10, 8)
+		if err != nil {
+			return nil
+		}
+		targetPointFormats = append(targetPointFormats, byte(pid))
+	}
+	extMap["11"] = &tls.SupportedPointsExtension{SupportedPoints: targetPointFormats}
+
+	// build extenions list
+	var exts []tls.TLSExtension
+	for _, e := range extensions {
+		te, ok := extMap[e]
+		if !ok {
+			return nil
+		}
+		exts = append(exts, te)
+	}
+	// build SSLVersion
+	vid64, err := strconv.ParseUint(version, 10, 16)
+	if err != nil {
+		return nil
+	}
+	vid := uint16(vid64)
+
+	// build CipherSuites
+	var suites []uint16
+	for _, c := range ciphers {
+		cid, err := strconv.ParseUint(c, 10, 16)
+		if err != nil {
+			return nil
+		}
+		suites = append(suites, uint16(cid))
+	}
+
+	return &tls.ClientHelloSpec{
+		TLSVersMin:         vid,
+		TLSVersMax:         vid,
+		CipherSuites:       suites,
+		CompressionMethods: []byte{0},
+		Extensions:         exts,
+		GetSessionID:       sha256.Sum256,
 	}
 }
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
 // variable.
-func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
+func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 	if config.Custom.JA3 != "" {
-		targetPointFormats, _, targetCurves := Data.ParseJA3String()
-		return []tls.TLSExtension{
-			&tls.CompressCertificateExtension{
-				Algorithms: []tls.CertCompressionAlgo{
-					tls.CertCompressionBrotli,
-					tls.CertCompressionZlib,
-				},
-			},
-			&tls.SNIExtension{ServerName: Data.Url.Host},
-			&tls.SupportedCurvesExtension{Curves: targetCurves},
-			&tls.SupportedPointsExtension{SupportedPoints: targetPointFormats},
-			&tls.SessionTicketExtension{},
-			&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
-			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
-			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
-			&tls.PSKKeyExchangeModesExtension{
-				Modes: []uint8{
-					tls.PskModePlain,
-					tls.PskModeDHE,
-				}},
-			&tls.SupportedVersionsExtension{
-				Versions: []uint16{
-					tls.VersionTLS13,
-					tls.VersionTLS12,
-					tls.VersionTLS11,
-					tls.VersionTLS10}}}
+		return Data.ParseJA3String(config.Custom.JA3)
 	} else {
-		return []tls.TLSExtension{
-			&tls.CompressCertificateExtension{
-				Algorithms: []tls.CertCompressionAlgo{
-					tls.CertCompressionBrotli,
-					tls.CertCompressionZlib,
+		return &tls.ClientHelloSpec{
+			CipherSuites: config.Custom.Ciphersuites,
+			TLSVersMin:   tls.VersionTLS13,
+			TLSVersMax:   tls.VersionTLS13,
+			GetSessionID: sha256.Sum256,
+			Extensions: []tls.TLSExtension{
+				&tls.CompressCertificateExtension{
+					Algorithms: []tls.CertCompressionAlgo{
+						tls.CertCompressionBrotli,
+						tls.CertCompressionZlib,
+					},
 				},
-			},
-			&tls.SNIExtension{ServerName: Data.Url.Host},
-			&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
-			&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
-			&tls.SessionTicketExtension{},
-			&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
-			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
-			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
-			&tls.PSKKeyExchangeModesExtension{
-				Modes: []uint8{
-					tls.PskModePlain,
-					tls.PskModeDHE,
-				}},
-			&tls.SupportedVersionsExtension{
-				Versions: []uint16{
-					tls.VersionTLS13,
-					tls.VersionTLS12,
-					tls.VersionTLS11,
-					tls.VersionTLS10}}}
+				&tls.StatusRequestExtension{},
+				&tls.SNIExtension{ServerName: Data.Url.Host},
+				&tls.SupportedCurvesExtension{Curves: config.Custom.CurvePreferences},
+				&tls.SupportedPointsExtension{SupportedPoints: config.Custom.SupportedPoints},
+				&tls.SCTExtension{},
+				&tls.UtlsPaddingExtension{GetPaddingLen: tls.BoringPaddingStyle},
+				&tls.UtlsExtendedMasterSecretExtension{},
+				&tls.FakeRecordSizeLimitExtension{},
+				&tls.SessionTicketExtension{},
+				&tls.ALPNExtension{AlpnProtocols: Data.Client.Config.Protocols},
+				&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
+				&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
+				&tls.PSKKeyExchangeModesExtension{
+					Modes: []uint8{
+						tls.PskModeDHE,
+					}},
+				&tls.RenegotiationInfoExtension{
+					Renegotiation: tls.RenegotiateFreelyAsClient,
+				},
+				&tls.NPNExtension{},
+				&tls.SupportedVersionsExtension{
+					Versions: []uint16{
+						tls.GREASE_PLACEHOLDER,
+						tls.VersionTLS13,
+						tls.VersionTLS12,
+						tls.VersionTLS11,
+						tls.VersionTLS10}}},
+		}
 	}
 }
 
