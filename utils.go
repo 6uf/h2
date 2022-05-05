@@ -58,7 +58,12 @@ func (Data *Conn) ParseJA3String() (targetPointFormats []byte, suites []uint16, 
 
 // Makes a default Spec that contains CipherSuites, TLSver max/min. GenerateSpec adds extensions to this spec.
 func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
-	return &tls.ClientHelloSpec{}
+	return &tls.ClientHelloSpec{
+		CipherSuites: config.Custom.Ciphersuites,
+		Extensions:   Data.GenerateSpec(config),
+		TLSVersMin:   tls.VersionTLS10,
+		TLSVersMax:   tls.VersionTLS13,
+	}
 }
 
 // This checks for JA3 strings, if so it gens the pointers, ciphers, etc. then applys them to the DefaultSpec through the extension
@@ -66,7 +71,6 @@ func (Data *Conn) DefaultSpec(config ReqConfig) *tls.ClientHelloSpec {
 func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
 	if config.Custom.JA3 != "" {
 		targetPointFormats, _, targetCurves := Data.ParseJA3String()
-
 		return []tls.TLSExtension{
 			&tls.CompressCertificateExtension{
 				Algorithms: []tls.CertCompressionAlgo{
@@ -82,7 +86,10 @@ func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
 			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
 			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
 			&tls.PSKKeyExchangeModesExtension{
-				Modes: []uint8{0}}, // pskModeDHE
+				Modes: []uint8{
+					tls.PskModePlain,
+					tls.PskModeDHE,
+				}},
 			&tls.SupportedVersionsExtension{
 				Versions: []uint16{
 					tls.VersionTLS13,
@@ -105,7 +112,10 @@ func (Data *Conn) GenerateSpec(config ReqConfig) []tls.TLSExtension {
 			&tls.SignatureAlgorithmsExtension{SupportedSignatureAlgorithms: config.Custom.TLSSignatureScheme},
 			&tls.KeyShareExtension{KeyShares: []tls.KeyShare{}},
 			&tls.PSKKeyExchangeModesExtension{
-				Modes: []uint8{0}}, // pskModeDHE
+				Modes: []uint8{
+					tls.PskModePlain,
+					tls.PskModeDHE,
+				}},
 			&tls.SupportedVersionsExtension{
 				Versions: []uint16{
 					tls.VersionTLS13,
@@ -145,14 +155,15 @@ func (Data *Conn) GenerateConn(config ReqConfig) (err error) {
 		tlsConn = tls.UClient(conn, &tls.Config{
 			ServerName:               Data.Url.Host,
 			NextProtos:               Data.Client.Config.Protocols,
-			CipherSuites:             Data.Config.Custom.Ciphersuites,
 			InsecureSkipVerify:       config.InsecureSkipVerify,
 			Renegotiation:            config.Renegotiation,
 			PreferServerCipherSuites: config.PreferServerCipherSuites,
 			RootCAs:                  config.RootCAs,
 			ClientCAs:                config.ClientCAs,
 		}, tls.HelloCustom)
-		tlsConn.Extensions = Data.GenerateSpec(config)
+		if err := tlsConn.ApplyPreset(Data.DefaultSpec(config)); err != nil {
+			return err
+		}
 	} else {
 		tlsConn = tls.UClient(conn, &tls.Config{
 			ServerName:               Data.Url.Host,
