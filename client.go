@@ -61,8 +61,8 @@ func (Data *Conn) ChangeProxy(proxy *ProxyAuth) {
 }
 
 // Changes the url path, so you can send to different locations under one variable.
-func (Data *Conn) ChangeURL(path string) {
-	Data.Url, _ = url.Parse(path)
+func (Data *Conn) ChangeURL(url *url.URL) {
+	Data.Url = url
 }
 
 // adds a header to the client struct
